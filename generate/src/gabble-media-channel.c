@@ -36,6 +36,8 @@ enum
     GROUP_FLAGS_CHANGED,
     MEMBERS_CHANGED,
     NEW_SESSION_HANDLER,
+    PROPERTIES_CHANGED,
+    PROPERTY_FLAGS_CHANGED,
     STREAM_ADDED,
     STREAM_DIRECTION_CHANGED,
     STREAM_ERROR,
@@ -116,6 +118,24 @@ gabble_media_channel_class_init (GabbleMediaChannelClass *gabble_media_channel_c
                   NULL, NULL,
                   gabble_media_channel_marshal_VOID__STRING_STRING,
                   G_TYPE_NONE, 2, DBUS_TYPE_G_OBJECT_PATH, G_TYPE_STRING);
+
+  signals[PROPERTIES_CHANGED] =
+    g_signal_new ("properties-changed",
+                  G_OBJECT_CLASS_TYPE (gabble_media_channel_class),
+                  G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+                  0,
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1, (dbus_g_type_get_collection ("GPtrArray", (dbus_g_type_get_struct ("GValueArray", G_TYPE_UINT, G_TYPE_VALUE, G_TYPE_INVALID)))));
+
+  signals[PROPERTY_FLAGS_CHANGED] =
+    g_signal_new ("property-flags-changed",
+                  G_OBJECT_CLASS_TYPE (gabble_media_channel_class),
+                  G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+                  0,
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1, (dbus_g_type_get_collection ("GPtrArray", (dbus_g_type_get_struct ("GValueArray", G_TYPE_UINT, G_TYPE_UINT, G_TYPE_INVALID)))));
 
   signals[STREAM_ADDED] =
     g_signal_new ("stream-added",
@@ -410,6 +430,28 @@ gabble_media_channel_get_members (GabbleMediaChannel *self,
 
 
 /**
+ * gabble_media_channel_get_properties
+ *
+ * Implements D-Bus method GetProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @error: Used to return a pointer to a GError detailing any error
+ *         that occurred, D-Bus will throw the error only if this
+ *         function returns FALSE.
+ *
+ * Returns: TRUE if successful, FALSE if an error was thrown.
+ */
+gboolean
+gabble_media_channel_get_properties (GabbleMediaChannel *self,
+                                     const GArray *properties,
+                                     GPtrArray **ret,
+                                     GError **error)
+{
+  return TRUE;
+}
+
+
+/**
  * gabble_media_channel_get_remote_pending_members
  *
  * Implements D-Bus method GetRemotePendingMembers
@@ -467,6 +509,27 @@ gboolean
 gabble_media_channel_get_session_handlers (GabbleMediaChannel *self,
                                            GPtrArray **ret,
                                            GError **error)
+{
+  return TRUE;
+}
+
+
+/**
+ * gabble_media_channel_list_properties
+ *
+ * Implements D-Bus method ListProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @error: Used to return a pointer to a GError detailing any error
+ *         that occurred, D-Bus will throw the error only if this
+ *         function returns FALSE.
+ *
+ * Returns: TRUE if successful, FALSE if an error was thrown.
+ */
+gboolean
+gabble_media_channel_list_properties (GabbleMediaChannel *self,
+                                      GPtrArray **ret,
+                                      GError **error)
 {
   return TRUE;
 }
@@ -578,5 +641,23 @@ gabble_media_channel_request_streams (GabbleMediaChannel *self,
                                       GError **error)
 {
   return TRUE;
+}
+
+
+/**
+ * gabble_media_channel_set_properties
+ *
+ * Implements D-Bus method SetProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @context: The D-Bus invocation context to use to return values
+ *           or throw an error.
+ */
+void
+gabble_media_channel_set_properties (GabbleMediaChannel *self,
+                                     const GPtrArray *properties,
+                                     DBusGMethodInvocation *context)
+{
+  return;
 }
 

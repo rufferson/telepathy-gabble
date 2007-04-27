@@ -70,12 +70,30 @@
       <arg direction="in" name="aliases" type="a{us}"/>
     </method>
   </interface>
+  <interface name="org.freedesktop.Telepathy.Connection.Interface.Capabilities">
+    <method name="AdvertiseCapabilities">
+      <arg direction="in" name="add" type="a(su)"/>
+      <arg direction="in" name="remove" type="as"/>
+      <arg direction="out" type="a(su)"/>
+    </method>
+    <signal name="CapabilitiesChanged">
+      <arg name="caps" type="a(usuuuu)"/>
+    </signal>
+    <method name="GetCapabilities">
+      <arg direction="in" name="handles" type="au"/>
+      <arg direction="out" type="a(usuu)"/>
+    </method>
+  </interface>
   <interface name="org.freedesktop.Telepathy.Connection.Interface.Presence">
     <method name="AddStatus">
       <arg direction="in" name="status" type="s"/>
       <arg direction="in" name="parms" type="a{sv}"/>
     </method>
     <method name="ClearStatus"/>
+    <method name="GetPresence">
+      <arg direction="in" name="contacts" type="au"/>
+      <arg direction="out" type="a{u(ua{sa{sv}})}"/>
+    </method>
     <method name="GetStatuses">
       <arg direction="out" type="a{s(ubba{ss})}"/>
     </method>
@@ -93,24 +111,6 @@
     </method>
     <method name="SetStatus">
       <arg direction="in" name="statuses" type="a{sa{sv}}"/>
-    </method>
-  </interface>
-  <interface name="org.freedesktop.Telepathy.Properties">
-    <method name="GetProperties">
-      <arg direction="in" name="properties" type="au"/>
-      <arg direction="out" type="a(uv)"/>
-    </method>
-    <method name="ListProperties">
-      <arg direction="out" type="a(ussu)"/>
-    </method>
-    <signal name="PropertiesChanged">
-      <arg name="properties" type="a(uv)"/>
-    </signal>
-    <signal name="PropertyFlagsChanged">
-      <arg name="properties" type="a(uu)"/>
-    </signal>
-    <method name="SetProperties">
-      <arg direction="in" name="properties" type="a(uv)"/>
     </method>
   </interface>
 </node>

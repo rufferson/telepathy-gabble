@@ -110,6 +110,12 @@ gabble_media_channel_get_members (GabbleMediaChannel *self,
                                   GError **error);
 
 gboolean
+gabble_media_channel_get_properties (GabbleMediaChannel *self,
+                                     const GArray *properties,
+                                     GPtrArray **ret,
+                                     GError **error);
+
+gboolean
 gabble_media_channel_get_remote_pending_members (GabbleMediaChannel *self,
                                                  GArray **ret,
                                                  GError **error);
@@ -123,6 +129,11 @@ gboolean
 gabble_media_channel_get_session_handlers (GabbleMediaChannel *self,
                                            GPtrArray **ret,
                                            GError **error);
+
+gboolean
+gabble_media_channel_list_properties (GabbleMediaChannel *self,
+                                      GPtrArray **ret,
+                                      GError **error);
 
 gboolean
 gabble_media_channel_list_streams (GabbleMediaChannel *self,
@@ -152,6 +163,11 @@ gabble_media_channel_request_streams (GabbleMediaChannel *self,
                                       const GArray *types,
                                       GPtrArray **ret,
                                       GError **error);
+
+void
+gabble_media_channel_set_properties (GabbleMediaChannel *self,
+                                     const GPtrArray *properties,
+                                     DBusGMethodInvocation *context);
 
 
 

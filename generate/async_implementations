@@ -5,6 +5,6 @@ GabbleConnection org.freedesktop.Telepathy.Connection RequestChannel
 GabbleConnection org.freedesktop.Telepathy.Connection RequestHandles
 GabbleConnection org.freedesktop.Telepathy.Connection.Interface.Aliasing RequestAliases
 GabbleConnection org.freedesktop.Telepathy.Connection.Interface.Presence GetPresence
-GabbleConnection org.freedesktop.Telepathy.Properties SetProperties
+GabbleMediaChannel org.freedesktop.Telepathy.Properties SetProperties
 GabbleMucChannel org.freedesktop.Telepathy.Channel.Interface.Password ProvidePassword
 GabbleMucChannel org.freedesktop.Telepathy.Properties SetProperties

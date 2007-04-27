@@ -36,8 +36,6 @@ enum
     CAPABILITIES_CHANGED,
     NEW_CHANNEL,
     PRESENCE_UPDATE,
-    PROPERTIES_CHANGED,
-    PROPERTY_FLAGS_CHANGED,
     STATUS_CHANGED,
     LAST_SIGNAL
 };
@@ -114,24 +112,6 @@ gabble_connection_class_init (GabbleConnectionClass *gabble_connection_class)
                   NULL, NULL,
                   g_cclosure_marshal_VOID__BOXED,
                   G_TYPE_NONE, 1, (dbus_g_type_get_map ("GHashTable", G_TYPE_UINT, (dbus_g_type_get_struct ("GValueArray", G_TYPE_UINT, (dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, (dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_VALUE)))), G_TYPE_INVALID)))));
-
-  signals[PROPERTIES_CHANGED] =
-    g_signal_new ("properties-changed",
-                  G_OBJECT_CLASS_TYPE (gabble_connection_class),
-                  G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
-                  0,
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__BOXED,
-                  G_TYPE_NONE, 1, (dbus_g_type_get_collection ("GPtrArray", (dbus_g_type_get_struct ("GValueArray", G_TYPE_UINT, G_TYPE_VALUE, G_TYPE_INVALID)))));
-
-  signals[PROPERTY_FLAGS_CHANGED] =
-    g_signal_new ("property-flags-changed",
-                  G_OBJECT_CLASS_TYPE (gabble_connection_class),
-                  G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
-                  0,
-                  NULL, NULL,
-                  g_cclosure_marshal_VOID__BOXED,
-                  G_TYPE_NONE, 1, (dbus_g_type_get_collection ("GPtrArray", (dbus_g_type_get_struct ("GValueArray", G_TYPE_UINT, G_TYPE_UINT, G_TYPE_INVALID)))));
 
   signals[STATUS_CHANGED] =
     g_signal_new ("status-changed",
@@ -363,28 +343,6 @@ gabble_connection_get_presence (GabbleConnection *self,
 
 
 /**
- * gabble_connection_get_properties
- *
- * Implements D-Bus method GetProperties
- * on interface org.freedesktop.Telepathy.Properties
- *
- * @error: Used to return a pointer to a GError detailing any error
- *         that occurred, D-Bus will throw the error only if this
- *         function returns FALSE.
- *
- * Returns: TRUE if successful, FALSE if an error was thrown.
- */
-gboolean
-gabble_connection_get_properties (GabbleConnection *self,
-                                  const GArray *properties,
-                                  GPtrArray **ret,
-                                  GError **error)
-{
-  return TRUE;
-}
-
-
-/**
  * gabble_connection_get_protocol
  *
  * Implements D-Bus method GetProtocol
@@ -522,27 +480,6 @@ gboolean
 gabble_connection_list_channels (GabbleConnection *self,
                                  GPtrArray **ret,
                                  GError **error)
-{
-  return TRUE;
-}
-
-
-/**
- * gabble_connection_list_properties
- *
- * Implements D-Bus method ListProperties
- * on interface org.freedesktop.Telepathy.Properties
- *
- * @error: Used to return a pointer to a GError detailing any error
- *         that occurred, D-Bus will throw the error only if this
- *         function returns FALSE.
- *
- * Returns: TRUE if successful, FALSE if an error was thrown.
- */
-gboolean
-gabble_connection_list_properties (GabbleConnection *self,
-                                   GPtrArray **ret,
-                                   GError **error)
 {
   return TRUE;
 }
@@ -706,24 +643,6 @@ gabble_connection_set_last_activity_time (GabbleConnection *self,
                                           GError **error)
 {
   return TRUE;
-}
-
-
-/**
- * gabble_connection_set_properties
- *
- * Implements D-Bus method SetProperties
- * on interface org.freedesktop.Telepathy.Properties
- *
- * @context: The D-Bus invocation context to use to return values
- *           or throw an error.
- */
-void
-gabble_connection_set_properties (GabbleConnection *self,
-                                  const GPtrArray *properties,
-                                  DBusGMethodInvocation *context)
-{
-  return;
 }
 
 

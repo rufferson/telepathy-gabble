@@ -102,12 +102,6 @@ gabble_connection_get_presence (GabbleConnection *self,
                                 DBusGMethodInvocation *context);
 
 gboolean
-gabble_connection_get_properties (GabbleConnection *self,
-                                  const GArray *properties,
-                                  GPtrArray **ret,
-                                  GError **error);
-
-gboolean
 gabble_connection_get_protocol (GabbleConnection *self,
                                 gchar **ret,
                                 GError **error);
@@ -143,11 +137,6 @@ gboolean
 gabble_connection_list_channels (GabbleConnection *self,
                                  GPtrArray **ret,
                                  GError **error);
-
-gboolean
-gabble_connection_list_properties (GabbleConnection *self,
-                                   GPtrArray **ret,
-                                   GError **error);
 
 void
 gabble_connection_release_handles (GabbleConnection *self,
@@ -193,11 +182,6 @@ gboolean
 gabble_connection_set_last_activity_time (GabbleConnection *self,
                                           guint time,
                                           GError **error);
-
-void
-gabble_connection_set_properties (GabbleConnection *self,
-                                  const GPtrArray *properties,
-                                  DBusGMethodInvocation *context);
 
 gboolean
 gabble_connection_set_status (GabbleConnection *self,
