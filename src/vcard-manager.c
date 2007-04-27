@@ -28,6 +28,7 @@
 
 #include "debug.h"
 #include "gabble-connection.h"
+#include "handles.h"
 #include "namespaces.h"
 #include "telepathy-helpers.h"
 #include "util.h"
