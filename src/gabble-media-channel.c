@@ -88,7 +88,30 @@ enum
   PROP_CONNECTION,
   PROP_CREATOR,
   PROP_FACTORY,
+  /* TP properties (see also below) */
+  PROP_NAT_TRAVERSAL,
+  PROP_STUN_SERVER,
+  PROP_STUN_PORT,
+  PROP_GTALK_P2P_RELAY_TOKEN,
   LAST_PROPERTY
+};
+
+/* TP properties */
+enum
+{
+  CHAN_PROP_NAT_TRAVERSAL = 0,
+  CHAN_PROP_STUN_SERVER,
+  CHAN_PROP_STUN_PORT,
+  CHAN_PROP_GTALK_P2P_RELAY_TOKEN,
+  NUM_CHAN_PROPS,
+  INVALID_CHAN_PROP
+};
+
+const GabblePropertySignature channel_property_signatures[NUM_CHAN_PROPS] = {
+      { "nat-traversal",          G_TYPE_STRING },
+      { "stun-server",            G_TYPE_STRING },
+      { "stun-port",              G_TYPE_UINT   },
+      { "gtalk-p2p-relay-token",  G_TYPE_STRING }
 };
 
 /* private structure */
@@ -122,6 +145,10 @@ gabble_media_channel_init (GabbleMediaChannel *self)
   self->priv = priv;
 
   priv->next_stream_id = 1;
+
+  /* initialize properties mixin */
+  gabble_properties_mixin_init (G_OBJECT (self), G_STRUCT_OFFSET (
+      GabbleMediaChannel, properties));
 }
 
 static GObject *
@@ -296,6 +323,8 @@ gabble_media_channel_get_property (GObject    *object,
 {
   GabbleMediaChannel *chan = GABBLE_MEDIA_CHANNEL (object);
   GabbleMediaChannelPrivate *priv = GABBLE_MEDIA_CHANNEL_GET_PRIVATE (chan);
+  const gchar *param_name;
+  guint tp_property_id;
 
   switch (property_id) {
     case PROP_OBJECT_PATH:
@@ -320,6 +349,21 @@ gabble_media_channel_get_property (GObject    *object,
       g_value_set_object (value, priv->factory);
       break;
     default:
+      param_name = g_param_spec_get_name (pspec);
+
+      if (gabble_properties_mixin_has_property (object, param_name,
+            &tp_property_id))
+        {
+          GValue *tp_property_value =
+            chan->properties.properties[tp_property_id].value;
+
+          if (tp_property_value)
+            {
+              g_value_copy (tp_property_value, value);
+              return;
+            }
+        }
+
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
@@ -333,6 +377,8 @@ gabble_media_channel_set_property (GObject     *object,
 {
   GabbleMediaChannel *chan = GABBLE_MEDIA_CHANNEL (object);
   GabbleMediaChannelPrivate *priv = GABBLE_MEDIA_CHANNEL_GET_PRIVATE (chan);
+  const gchar *param_name;
+  guint tp_property_id;
 
   switch (property_id) {
     case PROP_OBJECT_PATH:
@@ -353,6 +399,19 @@ gabble_media_channel_set_property (GObject     *object,
       priv->factory = g_value_get_object (value);
       break;
     default:
+      param_name = g_param_spec_get_name (pspec);
+
+      if (gabble_properties_mixin_has_property (object, param_name,
+            &tp_property_id))
+        {
+          gabble_properties_mixin_change_value (object, tp_property_id, value,
+              NULL);
+          gabble_properties_mixin_change_flags (object, tp_property_id,
+              TP_PROPERTY_FLAG_READ, 0, NULL);
+
+          return;
+        }
+
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
@@ -416,6 +475,46 @@ gabble_media_channel_class_init (GabbleMediaChannelClass *gabble_media_channel_c
                                     G_PARAM_STATIC_NICK |
                                     G_PARAM_STATIC_BLURB);
   g_object_class_install_property (object_class, PROP_FACTORY, param_spec);
+
+  param_spec = g_param_spec_string ("nat-traversal",
+                                    "NAT traversal",
+                                    "NAT traversal mechanism.",
+                                    "gtalk-p2p",
+                                    G_PARAM_CONSTRUCT |
+                                    G_PARAM_READWRITE |
+                                    G_PARAM_STATIC_NAME |
+                                    G_PARAM_STATIC_BLURB);
+  g_object_class_install_property (object_class, PROP_NAT_TRAVERSAL,
+      param_spec);
+
+  param_spec = g_param_spec_string ("stun-server",
+                                    "STUN server",
+                                    "IP or address of STUN server.",
+                                    NULL,
+                                    G_PARAM_READWRITE |
+                                    G_PARAM_STATIC_NAME |
+                                    G_PARAM_STATIC_BLURB);
+  g_object_class_install_property (object_class, PROP_STUN_SERVER, param_spec);
+
+  param_spec = g_param_spec_uint ("stun-port",
+                                  "STUN port",
+                                  "UDP port of STUN server.",
+                                  0, G_MAXUINT16, 0,
+                                  G_PARAM_READWRITE |
+                                  G_PARAM_STATIC_NAME |
+                                  G_PARAM_STATIC_BLURB);
+  g_object_class_install_property (object_class, PROP_STUN_PORT, param_spec);
+
+  param_spec = g_param_spec_string ("gtalk-p2p-relay-token",
+                                    "GTalk P2P Relay Token",
+                                    "Magic token to authenticate with the "
+                                    "Google Talk relay server.",
+                                    NULL,
+                                    G_PARAM_READWRITE |
+                                    G_PARAM_STATIC_NAME |
+                                    G_PARAM_STATIC_BLURB);
+  g_object_class_install_property (object_class, PROP_GTALK_P2P_RELAY_TOKEN,
+      param_spec);
 
   signals[CLOSED] =
     g_signal_new ("closed",
@@ -481,6 +580,10 @@ gabble_media_channel_class_init (GabbleMediaChannelClass *gabble_media_channel_c
                   G_TYPE_NONE, 2, G_TYPE_UINT, G_TYPE_UINT);
 
   dbus_g_object_type_install_info (G_TYPE_FROM_CLASS (gabble_media_channel_class), &dbus_glib_gabble_media_channel_object_info);
+
+  gabble_properties_mixin_class_init (object_class,
+      G_STRUCT_OFFSET (GabbleMediaChannelClass, properties_class),
+      channel_property_signatures, NUM_CHAN_PROPS, NULL);
 }
 
 void
@@ -518,6 +621,7 @@ gabble_media_channel_finalize (GObject *object)
   g_free (priv->object_path);
 
   gabble_group_mixin_finalize (object);
+  gabble_properties_mixin_finalize (object);
 
   G_OBJECT_CLASS (gabble_media_channel_parent_class)->finalize (object);
 }
@@ -729,6 +833,7 @@ gabble_media_channel_get_interfaces (GabbleMediaChannel *self,
   const gchar *interfaces[] = {
       TP_IFACE_CHANNEL_INTERFACE_GROUP,
       TP_IFACE_CHANNEL_INTERFACE_MEDIA_SIGNALLING,
+      TP_IFACE_PROPERTIES,
       NULL
   };
 
@@ -781,6 +886,29 @@ gabble_media_channel_get_members (GabbleMediaChannel *self,
 }
 
 
+/*
+ * gabble_media_channel_get_properties
+ *
+ * Implements D-Bus method GetProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @error: Used to return a pointer to a GError detailing any error
+ *         that occurred, D-Bus will throw the error only if this
+ *         function returns FALSE.
+ *
+ * Returns: TRUE if successful, FALSE if an error was thrown.
+ */
+gboolean
+gabble_media_channel_get_properties (GabbleMediaChannel *self,
+                                     const GArray *properties,
+                                     GPtrArray **ret,
+                                     GError **error)
+{
+  return gabble_properties_mixin_get_properties (G_OBJECT (self), properties,
+      ret, error);
+}
+
+
 /**
  * gabble_media_channel_get_remote_pending_members
  *
@@ -821,6 +949,27 @@ gabble_media_channel_get_self_handle (GabbleMediaChannel *self,
                                       GError **error)
 {
   return gabble_group_mixin_get_self_handle (G_OBJECT (self), ret, error);
+}
+
+
+/**
+ * gabble_media_channel_list_properties
+ *
+ * Implements D-Bus method ListProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @error: Used to return a pointer to a GError detailing any error
+ *         that occurred, D-Bus will throw the error only if this
+ *         function returns FALSE.
+ *
+ * Returns: TRUE if successful, FALSE if an error was thrown.
+ */
+gboolean
+gabble_media_channel_list_properties (GabbleMediaChannel *self,
+                                      GPtrArray **ret,
+                                      GError **error)
+{
+  return gabble_properties_mixin_list_properties (G_OBJECT (self), ret, error);
 }
 
 
@@ -1181,6 +1330,25 @@ gabble_media_channel_request_streams (GabbleMediaChannel *self,
   g_ptr_array_free (streams, TRUE);
 
   return TRUE;
+}
+
+
+/**
+ * gabble_media_channel_set_properties
+ *
+ * Implements D-Bus method SetProperties
+ * on interface org.freedesktop.Telepathy.Properties
+ *
+ * @context: The D-Bus invocation context to use to return values
+ *           or throw an error.
+ */
+void
+gabble_media_channel_set_properties (GabbleMediaChannel *self,
+                                     const GPtrArray *properties,
+                                     DBusGMethodInvocation *context)
+{
+  gabble_properties_mixin_set_properties (G_OBJECT (self), properties,
+      context);
 }
 
 
