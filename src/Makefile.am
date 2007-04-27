@@ -93,8 +93,6 @@ libgabble_convenience_la_SOURCES = \
     handles.c \
     handle-set.h \
     handle-set.c \
-    jingle-info.c \
-    jingle-info.h \
     im-factory.h \
     im-factory.c \
     media-factory.h \
