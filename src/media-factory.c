@@ -698,10 +698,17 @@ gabble_media_factory_iface_connecting (TpChannelFactoryIface *iface)
 
   DEBUG ("adding callbacks");
 
+  g_assert (priv->jingle_cb == NULL);
+  g_assert (priv->jingle_info_cb == NULL);
+
   priv->jingle_cb = lm_message_handler_new (media_factory_jingle_cb, fac, NULL);
   lm_connection_register_message_handler (priv->conn->lmconn, priv->jingle_cb,
-                                          LM_MESSAGE_TYPE_IQ,
-                                          LM_HANDLER_PRIORITY_NORMAL);
+      LM_MESSAGE_TYPE_IQ, LM_HANDLER_PRIORITY_NORMAL);
+
+  priv->jingle_info_cb = lm_message_handler_new (jingle_info_iq_callback, fac,
+      NULL);
+  lm_connection_register_message_handler (priv->conn->lmconn,
+      priv->jingle_info_cb, LM_MESSAGE_TYPE_IQ, LM_HANDLER_PRIORITY_NORMAL);
 }
 
 static void
