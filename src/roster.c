@@ -822,6 +822,7 @@ gabble_roster_iq_cb (LmMessageHandler *handler,
               *deny_add, *deny_rem;
       GArray *removed;
       GabbleHandle handle;
+      GabbleRosterChannel *schan;
       GabbleRosterChannel *chan;
       guint i;
 
@@ -848,6 +849,10 @@ gabble_roster_iq_cb (LmMessageHandler *handler,
           deny_add = NULL;
           deny_rem = NULL;
         }
+
+      /* we need this for checking if a request is remote pending (and not removing it) */
+      handle = GABBLE_LIST_HANDLE_SUBSCRIBE;
+      schan = _gabble_roster_get_channel (roster, handle);
 
       /* get the publish channel first because we need it when processing */
       handle = GABBLE_LIST_HANDLE_PUBLISH;
@@ -926,12 +931,23 @@ gabble_roster_iq_cb (LmMessageHandler *handler,
             case GABBLE_ROSTER_SUBSCRIPTION_NONE:
             case GABBLE_ROSTER_SUBSCRIPTION_FROM:
               if (item->ask_subscribe)
-                g_intset_add (sub_rp, handle);
+                {
+                  g_intset_add (sub_rp, handle);
+                }
               else
-                g_intset_add (sub_rem, handle);
+                {
+                  /* don't remove remote pending, presence="unsubscribed" does that */
+                  if (!handle_set_is_member (schan->group.remote_pending, handle))
+                    {
+                      g_intset_add (sub_rem, handle);
+                    }
+                }
               break;
             case GABBLE_ROSTER_SUBSCRIPTION_REMOVE:
-              g_intset_add (sub_rem, handle);
+              if (!handle_set_is_member (schan->group.remote_pending, handle))
+                {
+                  g_intset_add (sub_rem, handle);
+                }
               break;
             default:
               g_assert_not_reached ();
@@ -950,7 +966,10 @@ gabble_roster_iq_cb (LmMessageHandler *handler,
                   g_intset_add (known_add, handle);
               break;
             case GABBLE_ROSTER_SUBSCRIPTION_REMOVE:
-              g_intset_add (known_rem, handle);
+              if (!handle_set_is_member (schan->group.remote_pending, handle))
+                {
+                  g_intset_add (known_rem, handle);
+                }
               break;
             default:
               g_assert_not_reached ();
