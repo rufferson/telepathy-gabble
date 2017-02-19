@@ -97,10 +97,12 @@ static const Feature self_advertised_features[] =
   { 0, NULL }
 };
 
+#if 0
 static const Feature quirks[] = {
       { 0, QUIRK_OMITS_CONTENT_CREATORS },
       { 0, NULL }
 };
+#endif
 
 static GabbleCapabilitySet *legacy_caps = NULL;
 static GabbleCapabilitySet *share_v1_caps = NULL;

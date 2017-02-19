@@ -33,10 +33,12 @@ static void plugin_iface_init (
     gpointer g_iface,
     gpointer data);
 
+#if 0
 static const gchar * const sidecar_interfaces[] = {
     GABBLE_IFACE_GABBLE_PLUGIN_CONSOLE,
     NULL
 };
+#endif
 
 G_DEFINE_TYPE_WITH_CODE (GabbleConsolePlugin, gabble_console_plugin,
     G_TYPE_OBJECT,
