@@ -141,7 +141,8 @@ typedef enum
   GABBLE_CONNECTION_FEATURES_ROSTERVER 	= 1 << 11,
   GABBLE_CONNECTION_FEATURES_CSI 	= 1 << 12,
   GABBLE_CONNECTION_FEATURES_SM 	= 1 << 13,
-  GABBLE_CONNECTION_FEATURES_AMP 	= 1 << 14
+  GABBLE_CONNECTION_FEATURES_AMP 	= 1 << 14,
+  GABBLE_CONNECTION_FEATURES_CARBONS 	= 1 << 15,
 } GabbleConnectionFeatures;
 
 typedef struct _GabbleConnectionPrivate GabbleConnectionPrivate;

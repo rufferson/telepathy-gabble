@@ -170,6 +170,7 @@ enum
     PROP_EXTRA_CERTIFICATE_IDENTITIES,
     PROP_POWER_SAVING,
     PROP_DOWNLOAD_AT_CONNECTION,
+    PROP_CARBONS,
 
     LAST_PROPERTY
 };
@@ -270,6 +271,9 @@ struct _GabbleConnectionPrivate
    * GabbleCapsChannelManagerInterface->get_contact_caps function. */
   GabbleImFactory *im_factory;
 
+  /* Message Carbons XEP-0280 */
+  gboolean carbons_enabled;
+
   /* stream id returned by the connector */
   gchar *stream_id;
 
@@ -302,6 +306,8 @@ static void connection_capabilities_update_cb (GabblePresenceCache *cache,
 
 static gboolean gabble_connection_refresh_capabilities (GabbleConnection *self,
     GabbleCapabilitySet **old_out);
+
+static void conn_message_carbons_set(GabbleConnection *, gboolean);
 
 static void
 add_to_array (gpointer data,
@@ -670,6 +676,9 @@ gabble_connection_get_property (GObject    *object,
         g_value_set_boolean (value, download_at_connection);
         break;
       }
+    case PROP_CARBONS:
+      g_value_set_boolean (value, priv->carbons_enabled);
+      break;
 
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -816,6 +825,14 @@ gabble_connection_set_property (GObject      *object,
       if (self->roster != NULL)
         g_object_set (self->roster, "download-at-connection",
             g_value_get_boolean (value), NULL);
+      break;
+
+    case PROP_CARBONS:
+      if(priv->porter != NULL &&
+        self->features & GABBLE_CONNECTION_FEATURES_CARBONS)
+          conn_message_carbons_set(self, g_value_get_boolean (value));
+      else
+          priv->carbons_enabled = g_value_get_boolean (value);
       break;
 
     default:
@@ -1220,6 +1237,15 @@ gabble_connection_class_init (GabbleConnectionClass *gabble_connection_class)
       g_param_spec_boolean (
           "power-saving", "Power saving active?",
           "Queue remote presence updates server-side for less network chatter",
+          FALSE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (
+      object_class, PROP_CARBONS,
+      g_param_spec_boolean (
+          "carbons", "Message Carbons active?",
+          "Request server to send carbon-copy of each incoming/outgoing"
+	  " message according to XEP-0280 specification",
           FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
@@ -3025,6 +3051,8 @@ connection_disco_cb (GabbleDisco *disco,
                 conn->features |= GABBLE_CONNECTION_FEATURES_GOOGLE_SETTING;
               else if (0 == strcmp (var, NS_WLM_JID_LOOKUP))
                 conn->features |= GABBLE_CONNECTION_FEATURES_WLM_JID_LOOKUP;
+              else if (0 == strcmp (var, NS_CARBONS2))
+                conn->features |= GABBLE_CONNECTION_FEATURES_CARBONS;
             }
         }
 
@@ -3041,6 +3069,9 @@ connection_disco_cb (GabbleDisco *disco,
           conn_wlm_jid_lookup_async,
           conn_wlm_jid_lookup_finish);
     }
+  if(conn->features & GABBLE_CONNECTION_FEATURES_CARBONS &&
+    conn->priv->carbons_enabled)
+      conn_message_carbons_set(conn, TRUE);
 
   conn_presence_set_initial_presence_async (conn,
       connection_initial_presence_cb, NULL);
@@ -3053,6 +3084,44 @@ ERROR:
       TP_CONNECTION_STATUS_REASON_NETWORK_ERROR);
 
   return;
+}
+
+static void
+conn_message_carbons_cb (GObject *source,
+    GAsyncResult *result,
+    gpointer user_data)
+{
+  GabbleConnection *conn = (GabbleConnection *) source;
+  WockyStanza *iq = NULL;
+  GError *error = NULL;
+
+  if (conn_util_send_iq_finish (conn, result, &iq, &error))
+    {
+      conn->priv->carbons_enabled = (user_data != NULL);
+      DEBUG("Server %sabled carbons", (user_data) ? "en" : "dis");
+    }
+  else
+    {
+      DEBUG("Failed to %sabled carbons: %s", (user_data) ? "en" : "dis",
+        error->message);
+    }
+}
+
+static void
+conn_message_carbons_set (GabbleConnection *conn,
+    gboolean enable)
+{
+  WockyStanza *iq = wocky_stanza_build (WOCKY_STANZA_TYPE_IQ,
+      WOCKY_STANZA_SUB_TYPE_SET, conn_util_get_bare_self_jid (conn), NULL,
+      '(', (enable) ? "enable" : "disable",
+        ':', NS_CARBONS2,
+      ')',
+      NULL);
+
+  /* Request server to set the carbons state */
+  conn_util_send_iq_async (conn, iq, NULL, conn_message_carbons_cb,
+      (enable)?"true":NULL);
+  DEBUG("Requested server to %sable carbons", enable ? "en" : "dis");
 }
 
 /**

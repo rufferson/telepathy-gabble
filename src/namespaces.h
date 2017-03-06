@@ -23,6 +23,7 @@
 
 #include "gabble/namespaces.h"
 
+#define NS_CARBONS2             "urn:xmpp:carbons:2"
 #define NS_ROSTERVER            "urn:xmpp:features:rosterver"
 #define NS_CSI                  "urn:xmpp:csi:0"
 #define NS_SM2                  "urn:xmpp:sm:2"
