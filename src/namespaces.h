@@ -69,6 +69,13 @@
 #define NS_JINGLE_RTP_AUDIO     "urn:xmpp:jingle:apps:rtp:audio"
 #define NS_JINGLE_RTP_VIDEO     "urn:xmpp:jingle:apps:rtp:video"
 
+/* XEP-0234 (Jingle FT) and XEP-0260 / 0261 Socks5 / InBand Bytestreams */
+#define NS_JINGLE_FT		"urn:xmpp:jingle:apps:file-transfer:"
+#define NS_JINGLE_FT3		NS_JINGLE_FT "3"
+#define NS_JINGLE_TRANSPORT_IBB "urn:xmpp:jingle:transports:ibb:1"
+#define NS_JINGLE_TRANSPORT_S5B "urn:xmpp:jingle:transports:s5b:1"
+#define NS_HASHES		"urn:xmpp:hashes:1"
+
 /* ProtoXEPs for rtcp-fb and rtp-hdrext */
 #define NS_JINGLE_RTCP_FB       "urn:xmpp:jingle:apps:rtp:rtcp-fb:0"
 #define NS_JINGLE_RTP_HDREXT    "urn:xmpp:jingle:apps:rtp:rtp-hdrext:0"

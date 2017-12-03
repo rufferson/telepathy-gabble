@@ -1258,6 +1258,47 @@ offer_bytestream (GabbleFileTransferChannel *self, const gchar *jid,
 
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
 void
+gabble_file_transfer_channel_transfer_state_changed (
+    GabbleFileTransferChannel *self, TpFileTransferState state,
+    TpFileTransferStateChangeReason reason)
+{
+  DEBUG ("file transfer state changed to %d", state);
+  switch (state)
+    {
+      case TP_FILE_TRANSFER_STATE_ACCEPTED:
+        if (self->priv->state == TP_FILE_TRANSFER_STATE_PENDING)
+          {
+            gabble_file_transfer_channel_set_state (
+                TP_SVC_CHANNEL_TYPE_FILE_TRANSFER (self),
+                TP_FILE_TRANSFER_STATE_ACCEPTED, reason);
+          }
+        break;
+      case TP_FILE_TRANSFER_STATE_OPEN:
+        channel_open (self);
+        break;
+      case TP_FILE_TRANSFER_STATE_CANCELLED:
+        if(reason == TP_FILE_TRANSFER_STATE_CHANGE_REASON_LOCAL_ERROR ||
+           (self->priv->state != TP_FILE_TRANSFER_STATE_COMPLETED &&
+            self->priv->state != TP_FILE_TRANSFER_STATE_CANCELLED))
+          {
+            gabble_file_transfer_channel_set_state (
+                TP_SVC_CHANNEL_TYPE_FILE_TRANSFER (self),
+                state, reason);
+          }
+        close_session_and_transport (self);
+        break;
+      default:
+        gabble_file_transfer_channel_set_state (
+            TP_SVC_CHANNEL_TYPE_FILE_TRANSFER (self),
+            state, reason);
+        if (state == TP_FILE_TRANSFER_STATE_COMPLETED &&
+            self->priv->transport &&
+            gibber_transport_buffer_is_empty (self->priv->transport))
+          gibber_transport_disconnect (self->priv->transport);
+    }
+}
+
+void
 gabble_file_transfer_channel_gtalk_file_collection_state_changed (
     GabbleFileTransferChannel *self,
     GTalkFileCollectionState state, gboolean local_terminator)

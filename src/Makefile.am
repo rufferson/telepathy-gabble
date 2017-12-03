@@ -157,6 +157,10 @@ libgabble_convenience_la_SOURCES += \
     call-member-content.c \
     call-stream.h \
     call-stream.c \
+    jingle-ft-content.h \
+    jingle-ft-content.c \
+    jingle-transport-ibb.h \
+    jingle-transport-ibb.c \
     jingle-share.h \
     jingle-share.c \
     jingle-mint.h \

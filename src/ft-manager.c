@@ -32,6 +32,7 @@
 
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
 #include "jingle-share.h"
+#include "jingle-ft-content.h"
 #endif
 #include "gabble/caps-channel-manager.h"
 #include "connection.h"
@@ -344,6 +345,39 @@ new_jingle_session_cb (GabbleJingleMint *jm,
   GList *channels = NULL;
   GList *cs, *i;
 
+  DEBUG ("New jingle session >>");
+  if (wocky_jingle_session_get_content_type (sess) ==
+      GABBLE_TYPE_JINGLE_FT)
+    {
+      cs = wocky_jingle_session_get_contents (sess);
+
+      for (i = cs; i; i = cs->next)
+        {
+          GabbleFileTransferChannel *chan;
+          GabbleJingleFT *jftc = GABBLE_JINGLE_FT (i->data);
+
+          if (jftc == NULL)
+            continue;
+
+          DEBUG ("New jingle file-transfer content >>");
+
+          chan = gabble_jingle_ft_new_channel (jftc,
+                                       self->priv->connection);
+
+          if (chan != NULL)
+            {
+              channels = g_list_prepend (channels, chan);
+            }
+        }
+      g_list_free (cs);
+
+      if (channels != NULL)
+        gabble_ft_manager_channels_created (self, channels);
+
+      g_list_free (channels);
+      DEBUG ("New jingle file-transfer session <<");
+    }
+  else
   if (wocky_jingle_session_get_content_type (sess) ==
       GABBLE_TYPE_JINGLE_SHARE)
     {
@@ -406,6 +440,7 @@ new_jingle_session_cb (GabbleJingleMint *jm,
           g_object_unref (gtalk_fc);
         }
     }
+  DEBUG ("New jingle session <<");
 }
 #endif
 
@@ -1028,6 +1063,9 @@ gabble_ft_manager_represent_client (
     GPtrArray *data_forms G_GNUC_UNUSED)
 {
   guint i;
+
+  gabble_capability_set_add (cap_set, NS_JINGLE_FT3);
+  gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_IBB);
 
   for (i = 0; i < filters->len; i++)
     {

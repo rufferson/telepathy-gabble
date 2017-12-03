@@ -91,6 +91,10 @@ gboolean gabble_file_transfer_channel_offer_file (
     GabbleFileTransferChannel *self, GError **error);
 
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
+void gabble_file_transfer_channel_transfer_state_changed (
+    GabbleFileTransferChannel *self, TpFileTransferState state,
+    TpFileTransferStateChangeReason reason);
+
 /* The following methods are a hack, they are 'signal-like' callbacks for the
    GTalkFileCollection. They have to be made this way because the FileCollection
    can't send out signals since it needs its signals to be sent to a specific
