@@ -41,6 +41,15 @@ G_DEFINE_TYPE_WITH_CODE (JingleTransportIBB, jingle_transport_ibb,
     G_IMPLEMENT_INTERFACE (WOCKY_TYPE_JINGLE_TRANSPORT_IFACE,
         transport_iface_init));
 
+/* signal enum */
+enum
+{
+  NEW_CANDIDATES,
+  LAST_SIGNAL
+};
+
+static guint signals[LAST_SIGNAL] = {0};
+
 /* properties */
 enum
 {
@@ -201,6 +210,13 @@ jingle_transport_ibb_class_init (JingleTransportIBBClass *cls)
                                     G_PARAM_READWRITE |
                                     G_PARAM_STATIC_STRINGS);
   g_object_class_install_property (object_class, PROP_BLOCK_SIZE, param_spec);
+
+  /* Unused for IBB, but is connected by content */
+  signals[NEW_CANDIDATES] = g_signal_new (
+    "new-candidates", G_TYPE_FROM_CLASS (cls),
+    G_SIGNAL_RUN_LAST,
+    0, NULL, NULL,
+    g_cclosure_marshal_VOID__POINTER, G_TYPE_NONE, 1, G_TYPE_POINTER);
 }
 
 static void
@@ -248,14 +264,31 @@ parse_candidates (WockyJingleTransportIface *obj, WockyNode *transport_node,
   priv->block_size = block_size;
 
   /* We don't really care about 'stanza' attribute, gabble implementation
-   * would handle both for incoming and is IQ-only for outgoing.
+   * would handle both for incoming data and uses IQ-only for outgoing.
    */
 
   /* for IBB valid transport element is the only prerequisite.
    * Connection (band) is already there.
    */
-  //priv->state = WOCKY_JINGLE_TRANSPORT_STATE_CONNECTED;
   priv->state = WOCKY_JINGLE_TRANSPORT_STATE_CONNECTING;
+}
+
+static void
+inject_candidates (WockyJingleTransportIface *obj, WockyNode *transport_node)
+{
+  JingleTransportIBB *t = GABBLE_JINGLE_TRANSPORT_IBB (obj);
+  JingleTransportIBBPrivate *priv = t->priv;
+
+  if (priv->sid != NULL)
+    wocky_node_set_attribute (transport_node, "sid", priv->sid);
+
+  if (priv->block_size > 0 && priv->block_size < 65536)
+    {
+      gchar bsize[6];
+
+      if (sprintf(bsize, "%d", priv->block_size)>0)
+        wocky_node_set_attribute (transport_node, "block_size", bsize);
+    }
 }
 
 static void
@@ -306,8 +339,10 @@ transport_iface_init (gpointer g_iface, gpointer iface_data)
   klass->get_remote_candidates = get_remote_candidates;
   klass->get_local_candidates = get_local_candidates;
   klass->get_transport_type = get_transport_type;
-  /* Optional calls
+
+  /* this one is optional but is the one populating transport node */
   klass->inject_candidates = inject_candidates;
+  /* Optional calls
   klass->send_candidates = send_candidates;
   klass->get_credentials = get_credentials;
   */

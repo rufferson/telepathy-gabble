@@ -18,9 +18,31 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Jingle FileTransfer (FT) implements XEP-0234
- * - jingle application type for file transfers.
- * */
+/* Jingle FileTransfer (FT) implements XEP-0234 - jingle application type for
+ * file transfers.
+ *
+ * This class is a subclass of WockyJingleContent, which is member of
+ * WockyJingleSession and manages transfer via GabbleFileTransferChannel.
+ *
+ * Incomming session is handled by WockyJingleFactory, which instantiates
+ * content object based on registered namespace handlers. New Jingle session
+ * containing GabbleJingleFT content is picked by GabbleFtManager which
+ * creates GabbleFileTransferChannel for the given content.
+ *
+ * Outgoing session is handled by GabbleFtManager which instantiates
+ * GabbleFileTransferChannel in Request mode. FtChannel then performs
+ * caps lookup for the given peer and choses transfer method - SI, JingleFT
+ * or (now non-exiting) GoogleTalkShare. GabbleJingleFT finally creates
+ * overarching WockyJingleSession, injects itself into it and arranges
+ * transport and bytestream.
+ *
+ * GabbleJingleFT requests GabbleBytestreamFactory to create an object of type
+ * GabbleBytestreamIface based on caps and injects it into FileTransferChannel
+ * to actually perform the data transfer.
+ *
+ * The bytestream is created based on WockyJingleTransportIface object to
+ * define or negotiate bytestream properties and identifiers.
+ */
 
 #include "config.h"
 #include "jingle-ft-content.h"
@@ -103,6 +125,7 @@ ensure_desc (GabbleJingleFT *self)
   if (self->priv->desc == NULL)
     {
       self->priv->desc = g_slice_new0 (GabbleJingleFTContent);
+      self->priv->desc->file = g_slice_new0 (GabbleJingleFTFileEntry);
     }
 }
 
@@ -350,9 +373,9 @@ content_state_changed (WockyJingleContent *c,
 {
   WockyJingleContentState state;
 
-  DEBUG ("called for %p by %p", self, c);
-
   g_object_get (c, "state", &state, NULL);
+
+  DEBUG ("called for %p by %p to %u", self, c, state);
 
   switch (state)
     {
@@ -388,6 +411,40 @@ content_state_changed (WockyJingleContent *c,
     }
 }
 
+static GabbleBytestreamIface *
+create_bytestream (GabbleJingleFT *self, TpHandle peer, const gchar *resource,
+    GabbleBytestreamFactory *factory, gchar *stream_id, const gchar *transport_ns)
+{
+  GabbleBytestreamIface *bytestream;
+  gchar *method, *sid;
+  const gchar *res;
+
+  if (transport_ns == NULL)
+    g_object_get (self->priv->transport, "bytestream", &method, NULL);
+  else
+    method = (gchar *) transport_ns;
+  if (stream_id == NULL)
+    g_object_get (self->priv->transport, "stream-id", &sid, NULL);
+  else
+    sid = stream_id;
+
+  if (resource == NULL)
+    res = wocky_jingle_session_get_peer_resource (
+		    WOCKY_JINGLE_CONTENT(self)->session);
+  else
+    res = resource;
+
+  DEBUG ("Creating bytestream[%s] %s for %d/%s", method, sid, peer, res);
+  bytestream = gabble_bytestream_factory_create_from_method (factory, method,
+      peer, sid, NULL, res, NULL, GABBLE_BYTESTREAM_STATE_LOCAL_PENDING);
+
+  if (stream_id == NULL)
+    g_free (sid);
+  if (transport_ns == NULL)
+    g_free (method);
+  return bytestream;
+}
+
 GabbleFileTransferChannel *
 gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
 {
@@ -398,7 +455,6 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
   GabbleJingleFTContent *meta;
   TpHandleRepoIface *contacts;
   TpHandle peer;
-  gchar *method, *sid;
 
   g_assert (self != NULL);
   g_assert (conn != NULL);
@@ -420,16 +476,9 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
   peer = tp_handle_ensure (contacts,
               wocky_jingle_session_get_peer_jid (session), NULL, NULL);
 
-  g_object_get (self->priv->transport, "bytestream", &method, NULL);
-  g_object_get (self->priv->transport, "stream-id", &sid, NULL);
-
-  bytestream = gabble_bytestream_factory_create_from_method (factory, method,
-              peer, sid, NULL,
-              wocky_jingle_session_get_peer_resource (session),
-              NULL, GABBLE_BYTESTREAM_STATE_LOCAL_PENDING);
-  g_free (sid);
-  g_free (method);
-
+  bytestream = create_bytestream (self, peer,
+      wocky_jingle_session_get_peer_resource (session),
+      factory, NULL, NULL);
   if (bytestream == NULL)
     goto TransportException;
 
@@ -438,7 +487,11 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
               TP_FILE_TRANSFER_STATE_PENDING,
               meta->file->type,
               meta->file->name,
-              meta->file->size,
+	      /* if we're doing partial range transfer - channel marks
+	       * transfer as complete only when it reaches "size" */
+	      ((meta->file->range_len > 0) ?
+	        meta->file->range_len + meta->file->range_off
+	       :meta->file->size ),
               meta->file->hash_algo,
               meta->file->hash,
               meta->file->desc,
@@ -488,6 +541,115 @@ gabble_jingle_ft_set_channel (GabbleJingleFT *self,
   set_channel (self, channel);
 }
 
+gboolean
+gabble_jingle_ft_new_content (GabbleFileTransferChannel *channel,
+    const gchar *bare_jid, const gchar *resource, const gchar *ns, GError **error)
+{
+  TpBaseChannel *base = TP_BASE_CHANNEL (channel);
+  TpBaseConnection *base_conn = tp_base_channel_get_connection (base);
+  GabbleConnection *conn = GABBLE_CONNECTION (base_conn);
+  gchar *name = NULL, *filename = NULL, *jid, *sid;
+  WockyJingleFactory *jfactory;
+  GabbleJingleFT *c = NULL;
+  GabbleJingleFTContent *desc = NULL;
+  WockyJingleSession *s = NULL;
+  GabbleBytestreamIface *bs = NULL;
+  const gchar *transport_ns;
+  gboolean resumable;
+  gboolean result = TRUE;
+
+  DEBUG ("Offering jingle file transfer to %s", resource);
+
+  jfactory = gabble_jingle_mint_get_factory (conn->jingle_mint);
+  if (jfactory == NULL)
+    goto done;
+
+  jid = g_strdup_printf ("%s/%s", bare_jid, resource);
+  /* This should be factory_ensure_session to stuff files into existing
+   * session while one is alive for given jid */
+  s = wocky_jingle_factory_create_session (jfactory, jid,
+		  WOCKY_JINGLE_DIALECT_V032, FALSE);
+  g_free (jid);
+  if (s == NULL)
+    goto done;
+
+  /* We'd need to discover transport but for now it's just IBB */
+  transport_ns = NS_JINGLE_TRANSPORT_IBB;
+
+  g_object_get (G_OBJECT (channel), "filename", &filename, NULL);
+  name = g_strdup_printf ("ft:%s", filename);
+
+  c = GABBLE_JINGLE_FT (wocky_jingle_session_add_content (s,
+          WOCKY_JINGLE_MEDIA_TYPE_NONE,
+	  WOCKY_JINGLE_CONTENT_SENDERS_INITIATOR,
+	  name, ns, transport_ns));
+  g_free (name);
+
+  if (c == NULL || c->priv->transport == NULL)
+    goto done;
+
+  ensure_desc (c);
+  desc = c->priv->desc;
+  if (desc == NULL)
+    goto done;
+
+  sid = gabble_bytestream_factory_generate_stream_id ();
+  g_object_set (G_OBJECT (c->priv->transport), "stream-id", sid, NULL);
+
+  bs = create_bytestream (c, tp_base_channel_get_target_handle (base),
+          resource, conn->bytestream_factory, sid, NULL);
+  g_free (sid);
+  if (bs == NULL)
+    {
+      c = NULL;
+      goto done;
+    }
+
+  /* all green */
+  desc->file->name = filename;
+  g_object_get (G_OBJECT (channel),
+      "size", &(desc->file->size),
+      "date", &(desc->file->date),
+      "description", &(desc->file->desc),
+      "content-type", &(desc->file->type),
+      "initial-offset", &(desc->file->range_off),
+      "content-hash-type", &(desc->file->hash_algo),
+      "content-hash", &(desc->file->hash),
+      "resume-supported", &resumable,
+    NULL);
+
+  if (resumable)
+    desc->file->range_len = desc->file->size - desc->file->range_off;
+
+  g_object_set (G_OBJECT (channel), "bytestream", bs, NULL);
+  set_channel (c, channel);
+  /* Signal content readiness */
+  _wocky_jingle_content_set_media_ready (WOCKY_JINGLE_CONTENT (c));
+  wocky_jingle_content_set_transport_state (WOCKY_JINGLE_CONTENT (c),
+		  WOCKY_JINGLE_TRANSPORT_STATE_CONNECTING);
+  g_object_set (G_OBJECT (bs), "state",
+		  GABBLE_BYTESTREAM_STATE_INITIATING, NULL);
+  /* when wocky is extended to ensure_session - this should not be
+   * blindly fired - need to check other content readiness */
+  wocky_jingle_session_accept (s);
+
+done:
+  if (c == NULL)
+    {
+      DEBUG ("Jingle File Transfer session setup failed: %p %p %p %p %p %p %p",
+          channel, conn, jfactory, s, c, desc, bs);
+      g_set_error (error, TP_ERROR, TP_ERROR_SERVICE_CONFUSED,
+          "Jingle File Transfer session setup failed");
+      result = FALSE;
+      if (s != NULL)
+        wocky_jingle_session_terminate (s, WOCKY_JINGLE_REASON_GENERAL_ERROR,
+            NULL, NULL);
+      g_free (filename);
+    }
+
+  return result;
+}
+
 static void
 transport_disposed (gpointer data, GObject *object)
 {
@@ -535,16 +697,16 @@ parse_description (WockyJingleContent *content,
 
   DEBUG ("parse description called");
 
-  if (priv->desc != NULL)
+  if (priv->desc != NULL && priv->channel == NULL)
     {
-      DEBUG ("Not parsing description, we already have a session");
+      DEBUG ("Not parsing description, we already have it");
       return;
     }
 
   if (wocky_node_has_ns (desc_node, NS_JINGLE_FT3))
     {
       DEBUG ("FT:3 namespace uses nested file container");
-      sess_node = wocky_node_get_child(desc_node, "offer");
+      sess_node = wocky_node_get_child (desc_node, "offer");
       if (sess_node == NULL)
         {
           gchar *dump = wocky_node_to_string (desc_node);
@@ -557,6 +719,40 @@ parse_description (WockyJingleContent *content,
     }
   else
       sess_node = desc_node;
+
+  if (priv->desc != NULL && priv->desc->file != NULL)
+    {
+      /* the only feasible activity in this case is to update offset */
+      WockyNode *f, *n;
+
+      f = wocky_node_get_child (sess_node, "file");
+      n = wocky_node_get_child (f, "range");
+
+      if (n != NULL)
+        {
+          const gchar *att = wocky_node_get_attribute (n, "offset");
+
+          if (att)
+	    {
+              priv->desc->file->range_off = g_ascii_strtoull (att, NULL, 10);
+	      g_object_set (G_OBJECT (priv->channel),
+		  "initial-offset", priv->desc->file->range_off, NULL);
+	    }
+
+          att = wocky_node_get_attribute (n, "length");
+          if (att)
+	    {
+              priv->desc->file->range_len = g_ascii_strtoull (att, NULL, 10);
+	      g_object_set (G_OBJECT (priv->channel), "size",
+	          priv->desc->file->range_off + priv->desc->file->range_off,
+		  NULL);
+	    }
+          else
+            priv->desc->file->range_len = priv->desc->file->size;
+        }
+
+      return;
+    }
 
   priv->desc = g_slice_new0 (GabbleJingleFTContent);
 
@@ -649,14 +845,20 @@ produce_description (WockyJingleContent *content, WockyNode *content_node)
   WockyNode *desc_node;
   WockyNode *sess_node;
 
+  const gchar *ns;
+
   DEBUG ("produce description called");
 
   ensure_desc (self);
 
-  desc_node = wocky_node_add_child_ns (content_node, "description",
-      NS_JINGLE_FT3);
+  g_object_get (G_OBJECT (self), "content-ns", &ns, NULL);
+  desc_node = wocky_node_add_child_ns (content_node, "description", ns);
 
-  sess_node = wocky_node_add_child (desc_node, "offer");
+  /* We support :3, :4 and :5. Only :3 has sub-node offer/request */
+  if (!tp_strdiff (ns, NS_JINGLE_FT3))
+    sess_node = wocky_node_add_child (desc_node, "offer");
+  else
+    sess_node = desc_node;
 
   if (priv->desc->file)
     {
@@ -714,7 +916,7 @@ produce_description (WockyJingleContent *content, WockyNode *content_node)
               wocky_node_set_attribute (range, "offset", tmp_str);
               g_free (tmp_str);
             }
-          if (f->range_len > 0)
+          if (f->range_len > 0 && f->range_len < f->size)
             {
               tmp_str = g_strdup_printf ("%" G_GUINT64_FORMAT, f->range_len);
               wocky_node_set_attribute (range, "length", tmp_str);
@@ -779,17 +981,14 @@ gabble_jingle_ft_class_init (GabbleJingleFTClass *cls)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
-GabbleJingleFTContent *
-gabble_jingle_ft_get_content (GabbleJingleFT *self)
-{
-  DEBUG ("retrieving content descriptor for %p:%p:%p", self, self->priv, self->priv->desc);
-  ensure_desc (self);
-  return self->priv->desc;
-}
-
 void
 jingle_ft_content_register (WockyJingleFactory *factory)
 {
+  /* We have many many file transfer revisions */
   wocky_jingle_factory_register_content_type (factory,
       NS_JINGLE_FT3, GABBLE_TYPE_JINGLE_FT);
+  wocky_jingle_factory_register_content_type (factory,
+      NS_JINGLE_FT4, GABBLE_TYPE_JINGLE_FT);
+  wocky_jingle_factory_register_content_type (factory,
+      NS_JINGLE_FT5, GABBLE_TYPE_JINGLE_FT);
 }

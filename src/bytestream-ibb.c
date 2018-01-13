@@ -860,7 +860,7 @@ gabble_bytestream_ibb_initiate (GabbleBytestreamIface *iface)
 
   if (priv->state != GABBLE_BYTESTREAM_STATE_INITIATING)
     {
-      DEBUG ("bytestream is not is the initiating state (state %d",
+      DEBUG ("bytestream is not in the initiating state (state %d)",
           priv->state);
       return FALSE;
     }

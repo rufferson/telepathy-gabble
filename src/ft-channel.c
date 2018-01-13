@@ -652,7 +652,6 @@ gabble_file_transfer_channel_class_init (
       0,
       G_MAXUINT64,
       GABBLE_UNDEFINED_FILE_SIZE,
-      G_PARAM_CONSTRUCT_ONLY |
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
   g_object_class_install_property (object_class, PROP_SIZE, param_spec);
 
@@ -714,7 +713,6 @@ gabble_file_transfer_channel_class_init (
       0,
       G_MAXUINT64,
       0,
-      G_PARAM_CONSTRUCT_ONLY |
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
   g_object_class_install_property (object_class, PROP_INITIAL_OFFSET,
       param_spec);
@@ -736,7 +734,7 @@ gabble_file_transfer_channel_class_init (
       "Object implementing the GabbleBytestreamIface interface",
       "Bytestream object used to send the file",
       G_TYPE_OBJECT,
-      G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
   g_object_class_install_property (object_class, PROP_BYTESTREAM,
       param_spec);
 
@@ -1271,6 +1269,9 @@ gabble_file_transfer_channel_transfer_state_changed (
             gabble_file_transfer_channel_set_state (
                 TP_SVC_CHANNEL_TYPE_FILE_TRANSFER (self),
                 TP_FILE_TRANSFER_STATE_ACCEPTED, reason);
+	    if (self->priv->bytestream != NULL)
+              gabble_bytestream_iface_initiate (
+		  GABBLE_BYTESTREAM_IFACE (self->priv->bytestream));
           }
         break;
       case TP_FILE_TRANSFER_STATE_OPEN:
@@ -1412,6 +1413,8 @@ gabble_file_transfer_channel_offer_file (GabbleFileTransferChannel *self,
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
   gboolean jingle_share = FALSE;
   const gchar *share_resource = NULL;
+  const gchar *jingle_ft_res = NULL;
+  const gchar *jingle_ft_ns = NULL;
 #endif
 
   g_assert (!tp_str_empty (self->priv->filename));
@@ -1466,6 +1469,21 @@ gabble_file_transfer_channel_offer_file (GabbleFileTransferChannel *self,
       si = (si_resource != NULL);
 
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
+      jingle_ft_ns = NS_JINGLE_FT5;
+      jingle_ft_res = gabble_presence_pick_resource_by_caps (presence, 0,
+          gabble_capability_set_predicate_has, jingle_ft_ns);
+      if (jingle_ft_res == NULL)
+	{
+          jingle_ft_ns = NS_JINGLE_FT4;
+          jingle_ft_res = gabble_presence_pick_resource_by_caps (presence,
+              0, gabble_capability_set_predicate_has, jingle_ft_ns);
+	}
+      if (jingle_ft_res == NULL)
+        {
+          jingle_ft_ns = NS_JINGLE_FT3;
+          jingle_ft_res = gabble_presence_pick_resource_by_caps (presence,
+              0, gabble_capability_set_predicate_has, jingle_ft_ns);
+	}
       share_resource = gabble_presence_pick_resource_by_caps (presence, 0,
           gabble_capability_set_predicate_has, NS_GOOGLE_FEAT_SHARE);
       jingle_share  = (share_resource != NULL);
@@ -1484,6 +1502,7 @@ gabble_file_transfer_channel_offer_file (GabbleFileTransferChannel *self,
      jingle-share but we have no google relay token */
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
   use_si = si &&
+    (jingle_ft_res == NULL) &&
     (!jingle_share ||
      wocky_jingle_info_get_google_relay_token (
        gabble_jingle_mint_get_info (conn->jingle_mint)) == NULL);
@@ -1497,6 +1516,11 @@ gabble_file_transfer_channel_offer_file (GabbleFileTransferChannel *self,
       result = TRUE;
     }
 #ifdef ENABLE_JINGLE_FILE_TRANSFER
+  else if (jingle_ft_res != NULL)
+    {
+      result = gabble_jingle_ft_new_content (self,
+          jid, jingle_ft_res, jingle_ft_ns, error);
+    }
   else if (jingle_share)
     {
       gchar *full_jid = gabble_peer_to_jid (conn,

@@ -1046,6 +1046,9 @@ gabble_ft_manager_get_contact_caps (
     GPtrArray *arr)
 {
   if (gabble_capability_set_has (caps, NS_FILE_TRANSFER) ||
+      gabble_capability_set_has (caps, NS_JINGLE_FT3) ||
+      gabble_capability_set_has (caps, NS_JINGLE_FT4) ||
+      gabble_capability_set_has (caps, NS_JINGLE_FT5) ||
       gabble_capability_set_has (caps, NS_GOOGLE_FEAT_SHARE))
     {
       add_file_transfer_channel_class (arr,
@@ -1066,9 +1069,6 @@ gabble_ft_manager_represent_client (
 {
   guint i;
 
-  gabble_capability_set_add (cap_set, NS_JINGLE_FT3);
-  gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_IBB);
-
   for (i = 0; i < filters->len; i++)
     {
       GHashTable *channel_class = g_ptr_array_index (filters, i);
@@ -1086,6 +1086,12 @@ gabble_ft_manager_represent_client (
         continue;
 
       DEBUG ("client %s supports file transfer", client_name);
+      gabble_capability_set_add (cap_set, NS_JINGLE_FT3);
+      gabble_capability_set_add (cap_set, NS_JINGLE_FT4);
+      gabble_capability_set_add (cap_set, NS_JINGLE_FT5);
+      gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_IBB);
+      //gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_S5B);
+
       gabble_capability_set_add (cap_set, NS_FILE_TRANSFER);
       gabble_capability_set_add (cap_set, NS_GOOGLE_FEAT_SHARE);
       gabble_capability_set_add (cap_set, NS_TP_FT_METADATA);

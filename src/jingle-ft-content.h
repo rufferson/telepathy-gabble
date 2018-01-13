@@ -77,14 +77,15 @@ typedef struct {
   GabbleJingleFTFileEntry *file;
 } GabbleJingleFTContent;
 
-GabbleJingleFTContent *
-gabble_jingle_ft_get_content (GabbleJingleFT *ft);
-
 void gabble_jingle_ft_set_channel (GabbleJingleFT *ft,
     GabbleFileTransferChannel *channel);
 
 GabbleFileTransferChannel *
 gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn);
+
+gboolean gabble_jingle_ft_new_content (GabbleFileTransferChannel *channel,
+    const gchar *jid, const gchar *resource, const gchar *content_ns,
+    GError **error);
 
 void jingle_ft_content_register (WockyJingleFactory *factory);
 
