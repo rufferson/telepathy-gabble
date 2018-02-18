@@ -65,6 +65,34 @@ gabble_bytestream_iface_accept (GabbleBytestreamIface *self,
   virtual_method (self, func, user_data);
 }
 
+gboolean
+gabble_bytestream_iface_streamhost_used (GabbleBytestreamIface *self,
+				WockyNode *node)
+{
+  gboolean (*virtual_method)(GabbleBytestreamIface *, WockyNode *) =
+    GABBLE_BYTESTREAM_IFACE_GET_CLASS (self)->streamhost_used;
+  if (virtual_method)
+    return virtual_method (self, node);
+  return FALSE;
+}
+
+void gabble_bytestream_iface_add_streamhost (GabbleBytestreamIface *self,
+    const gchar *jid, const gchar *host, guint port)
+{
+  void (*virtual_method)(GabbleBytestreamIface *, const gchar *, const gchar *, guint) =
+    GABBLE_BYTESTREAM_IFACE_GET_CLASS (self)->add_streamhost;
+  if (virtual_method)
+    virtual_method (self, jid, host, port);
+}
+
+void gabble_bytestream_iface_connect (GabbleBytestreamIface *self)
+{
+  void (*virtual_method)(GabbleBytestreamIface *) =
+    GABBLE_BYTESTREAM_IFACE_GET_CLASS (self)->connect;
+  if (virtual_method)
+    virtual_method (self);
+}
+
 static void
 gabble_bytestream_iface_base_init (gpointer klass)
 {
@@ -132,6 +160,38 @@ gabble_bytestream_iface_base_init (gpointer klass)
           NULL,
           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
       g_object_interface_install_property (klass, param_spec);
+
+      param_spec = g_param_spec_uint (
+          "managed-state", "External management state",
+          "External bytestream management suppresses auto-negotiation",
+          0, 1, 0,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+      g_object_interface_install_property (klass, param_spec);
+
+      /* signals */
+      g_signal_new ("accepted",
+          G_TYPE_FROM_INTERFACE (klass),
+          G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+          g_cclosure_marshal_VOID__POINTER,
+	  G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+      g_signal_new ("rejected",
+          G_TYPE_FROM_INTERFACE (klass),
+          G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+          g_cclosure_marshal_VOID__VOID,
+	  G_TYPE_NONE, 0);
+
+      g_signal_new ("send-streamhosts",
+          G_TYPE_FROM_INTERFACE (klass),
+          G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+          g_cclosure_marshal_VOID__UINT_POINTER,
+          G_TYPE_NONE, 2, G_TYPE_UINT, G_TYPE_POINTER);
+
+      g_signal_new ("streamhost-used",
+          G_TYPE_FROM_INTERFACE (klass),
+          G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+          g_cclosure_marshal_VOID__POINTER,
+          G_TYPE_NONE, 1, G_TYPE_POINTER);
 
       g_signal_new ("data-received",
           G_TYPE_FROM_INTERFACE (klass),

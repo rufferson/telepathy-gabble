@@ -1090,7 +1090,7 @@ gabble_ft_manager_represent_client (
       gabble_capability_set_add (cap_set, NS_JINGLE_FT4);
       gabble_capability_set_add (cap_set, NS_JINGLE_FT5);
       gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_IBB);
-      //gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_S5B);
+      gabble_capability_set_add (cap_set, NS_JINGLE_TRANSPORT_S5B);
 
       gabble_capability_set_add (cap_set, NS_FILE_TRANSFER);
       gabble_capability_set_add (cap_set, NS_GOOGLE_FEAT_SHARE);

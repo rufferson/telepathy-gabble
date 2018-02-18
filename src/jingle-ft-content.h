@@ -77,8 +77,13 @@ typedef struct {
   GabbleJingleFTFileEntry *file;
 } GabbleJingleFTContent;
 
-void gabble_jingle_ft_set_channel (GabbleJingleFT *ft,
-    GabbleFileTransferChannel *channel);
+typedef struct
+{
+  GabbleSocks5Proxy px;
+  WockyJingleCandidateType type;
+  gchar *id;
+  guint prio;
+} JingleBytestreamCandidate;
 
 GabbleFileTransferChannel *
 gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn);

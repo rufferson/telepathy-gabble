@@ -46,6 +46,7 @@
 #include "gabble-signals-marshal.h"
 #include "namespaces.h"
 #include "presence-cache.h"
+#include "jingle-ft-content.h"
 #include "util.h"
 
 #include <telepathy-glib/telepathy-glib.h>

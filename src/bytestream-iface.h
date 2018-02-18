@@ -58,6 +58,12 @@ struct _GabbleBytestreamIfaceClass {
   void (*accept) (GabbleBytestreamIface *bytestream,
       GabbleBytestreamAugmentSiAcceptReply func, gpointer user_data);
   void (*block_reading) (GabbleBytestreamIface *bytestream, gboolean block);
+
+  gboolean (*streamhost_used) (GabbleBytestreamIface *obj,
+      WockyNode *streamhost);
+  void (*add_streamhost) (GabbleBytestreamIface *obj,
+      const gchar *jid, const gchar *host, guint port);
+  void (*connect) (GabbleBytestreamIface *obj);
 };
 
 GType gabble_bytestream_iface_get_type (void);
@@ -76,6 +82,8 @@ GType gabble_bytestream_iface_get_type (void);
 
 gboolean gabble_bytestream_iface_initiate (GabbleBytestreamIface *bytestream);
 
+void gabble_bytestream_iface_connect (GabbleBytestreamIface *bytestream);
+
 gboolean gabble_bytestream_iface_send (GabbleBytestreamIface *bytestream,
     guint len, const gchar *data);
 
@@ -84,6 +92,13 @@ void gabble_bytestream_iface_close (GabbleBytestreamIface *bytestream,
 
 void gabble_bytestream_iface_accept (GabbleBytestreamIface *bytestream,
     GabbleBytestreamAugmentSiAcceptReply func, gpointer user_data);
+
+gboolean
+gabble_bytestream_iface_streamhost_used (GabbleBytestreamIface *bytestream,
+    WockyNode *node);
+
+void gabble_bytestream_iface_add_streamhost (GabbleBytestreamIface *bytestream,
+    const gchar *jid, const gchar *host, guint port);
 
 void gabble_bytestream_iface_block_reading (GabbleBytestreamIface *bytestream,
     gboolean block);

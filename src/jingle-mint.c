@@ -35,6 +35,7 @@
 #include "jingle-share.h"
 #include "jingle-ft-content.h"
 #include "jingle-transport-ibb.h"
+#include "jingle-transport-s5b.h"
 #include "presence-cache.h"
 
 struct _GabbleJingleMintPrivate {
@@ -263,6 +264,7 @@ connection_porter_available_cb (
 
   jingle_share_register (priv->factory);
   jingle_ft_content_register (priv->factory);
+  jingle_transport_s5b_register (priv->factory);
   jingle_transport_ibb_register (priv->factory);
 
   tp_g_signal_connect_object (priv->factory, "new-session",

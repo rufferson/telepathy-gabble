@@ -220,6 +220,83 @@ bytestream_error_cb (GabbleBytestreamIface *bs, gpointer user_data)
   if (self->priv->channel)
     tp_base_channel_close (TP_BASE_CHANNEL(self->priv->channel));
   */
+  /* alternatively that means we cannot connect to any of the remote
+   * candidates - which is 'candidate-error' condition. */
+  g_object_set (G_OBJECT (self->priv->transport), "used-cid", "", NULL);
+}
+
+static gint
+_compare_streamhost (gconstpointer a, gconstpointer b)
+{
+    GabbleSocks5Proxy *ap = (GabbleSocks5Proxy*)a,
+		      *bp = (GabbleSocks5Proxy*)b;
+    return g_strcmp0 (ap->jid, bp->jid) || g_strcmp0 (ap->host, bp->host)
+	      || ap->port != bp->port;
+}
+static void
+on_streamhost_used (GObject *obj, gpointer arg, gpointer data)
+{
+  GabbleBytestreamIface *bs = GABBLE_BYTESTREAM_IFACE (obj);
+  GabbleJingleFT *self = data;
+  GList *res, *list = wocky_jingle_transport_iface_get_remote_candidates (
+             WOCKY_JINGLE_TRANSPORT_IFACE (self->priv->transport));
+  JingleBytestreamCandidate *c;
+
+  DEBUG ("Bytestream %p selected host %p[%p] for %p", bs, arg, list, self);
+
+  res = g_list_find_custom (list, arg, _compare_streamhost);
+
+  if (res == NULL)
+    return;
+
+  c = (JingleBytestreamCandidate*)(res->data);
+  DEBUG ("Selecting candidate %s[%p] for transport %p on %p",
+		  c->id, c, self->priv->transport, self);
+  g_object_set (G_OBJECT (self->priv->transport), "used-cid", c->id, NULL);
+  wocky_jingle_content_set_transport_state (WOCKY_JINGLE_CONTENT (self),
+                  WOCKY_JINGLE_TRANSPORT_STATE_CONNECTED);
+}
+
+static void
+on_send_streamhosts (GObject *object, guint local, gpointer *cs, gpointer data)
+{
+  GabbleBytestreamIface *bs = GABBLE_BYTESTREAM_IFACE (object);
+  GabbleJingleFT *self = GABBLE_JINGLE_FT (data);
+  GList *candidates = NULL;
+  GSList *l;
+
+  DEBUG ("[%p]: bytestream %p emits candidates %p with %u local",
+		  self, bs, cs, local);
+
+  for (l = (GSList*)cs; l != NULL; l = l->next)
+    {
+      JingleBytestreamCandidate *c = g_slice_new (JingleBytestreamCandidate);
+      GabbleSocks5Proxy *px = l->data;
+
+      c->id = gabble_bytestream_factory_generate_stream_id ();
+      c->px.jid = g_strdup (px->jid);
+      c->px.host = g_strdup (px->host);
+      c->px.port = px->port;
+      if (local > 0)
+        {
+          local--;
+	  c->type = WOCKY_JINGLE_CANDIDATE_TYPE_LOCAL;
+	  c->prio = 8257536;
+        }
+      else
+        {
+          c->type = WOCKY_JINGLE_CANDIDATE_TYPE_RELAY;
+	  c->prio = 655360;
+        }
+      candidates = g_list_prepend (candidates, c);
+    }
+
+
+  if (candidates != NULL)
+    wocky_jingle_transport_iface_new_local_candidates (self->priv->transport,
+		    candidates);
+
+  _wocky_jingle_content_set_media_ready (WOCKY_JINGLE_CONTENT (self));
 }
 
 static void
@@ -261,27 +338,6 @@ channel_exists (GabbleJingleFT * self, GabbleFileTransferChannel *channel)
 }
 
 static void
-channel_accepted (GObject *object, GObject *argument, gpointer data)
-{
-  GabbleBytestreamIface *bs = GABBLE_BYTESTREAM_IFACE (object);
-  GabbleFileTransferChannel *channel = GABBLE_FILE_TRANSFER_CHANNEL (argument);
-  GabbleJingleFT *self = GABBLE_JINGLE_FT (data);
-  int state;
-
-  DEBUG ("channel %p was accepted via %p for content %p", channel, bs, self);
-
-  g_return_if_fail (channel_exists (self, channel));
-
-  /* any content acceptance also accepts pending session */
-  g_object_get (WOCKY_JINGLE_CONTENT (self)->session, "state", &state, NULL);
-  if (state < WOCKY_JINGLE_STATE_PENDING_ACCEPT_SENT)
-    wocky_jingle_session_accept (WOCKY_JINGLE_CONTENT (self)->session);
-
-  wocky_jingle_content_set_transport_state (WOCKY_JINGLE_CONTENT (self),
-                  WOCKY_JINGLE_TRANSPORT_STATE_CONNECTED);
-}
-
-static void
 channel_rejected (GObject *object, gpointer data)
 {
   GabbleBytestreamIface *bs = GABBLE_BYTESTREAM_IFACE (object);
@@ -296,6 +352,57 @@ channel_rejected (GObject *object, gpointer data)
                   WOCKY_JINGLE_REASON_DECLINE, self))
     wocky_jingle_content_reject (WOCKY_JINGLE_CONTENT (self),
                   WOCKY_JINGLE_REASON_DECLINE);
+}
+
+static void
+channel_accepted (GObject *object, GObject *argument, gpointer data)
+{
+  GabbleBytestreamIface *bs = GABBLE_BYTESTREAM_IFACE (object);
+  GabbleFileTransferChannel *channel = GABBLE_FILE_TRANSFER_CHANNEL (argument);
+  GabbleJingleFT *self = GABBLE_JINGLE_FT (data);
+  GList *cs;
+  int state;
+
+  DEBUG ("channel %p was accepted via %p for content %p", channel, bs, self);
+
+  g_return_if_fail (channel_exists (self, channel));
+  g_return_if_fail (self->priv->transport != NULL);
+
+  /* any content acceptance also accepts pending session */
+  g_object_get (WOCKY_JINGLE_CONTENT (self)->session, "state", &state, NULL);
+  if (state < WOCKY_JINGLE_STATE_PENDING_ACCEPT_SENT)
+    wocky_jingle_session_accept (WOCKY_JINGLE_CONTENT (self)->session);
+
+  /* this populates local candidates from bytestream to transport */
+  if (!gabble_bytestream_iface_initiate (bs))
+    {
+      DEBUG ("Failed to initiate bytestram, aborting");
+      channel_rejected (G_OBJECT (bs), self);
+      return;
+    }
+
+  /* now we need to populate remote candidates to bytestream from transport */
+  cs = wocky_jingle_transport_iface_get_remote_candidates (
+		  self->priv->transport);
+  if (cs != NULL)
+    {
+      GList *l;
+      for (l = cs; l != NULL; l = l->next)
+        {
+          JingleBytestreamCandidate *c = l->data;
+          gabble_bytestream_iface_add_streamhost (bs,
+			  c->px.jid, c->px.host, c->px.port);
+        }
+      gabble_bytestream_iface_connect (bs);
+    }
+
+  /* finally flag readiness to send 'session-accept' if not already */
+  g_object_get (WOCKY_JINGLE_CONTENT (self), "state", &state, NULL);
+  if (state < WOCKY_JINGLE_CONTENT_STATE_SENT)
+    {
+      DEBUG ("Content %p still isn't sent[%d], ready now", self, state);
+      _wocky_jingle_content_set_media_ready (WOCKY_JINGLE_CONTENT (self));
+    }
 }
 
 static void
@@ -346,12 +453,14 @@ session_terminated (WockyJingleSession *session,
 {
   GabbleJingleFT *self = GABBLE_JINGLE_FT (user_data);
   GabbleFileTransferChannel *chan = self->priv->channel;
+  TpFileTransferState cstate;
   DEBUG ("session %p got terminated", session);
 
   if (self->priv->channel == NULL)
           return;
   chan = self->priv->channel;
   del_channel(self, NULL);
+  g_object_get (G_OBJECT (chan), "state", &cstate, NULL);
 
   /* State should be consistent for complete transfer */
   if (reason != WOCKY_JINGLE_REASON_SUCCESS)
@@ -363,7 +472,9 @@ session_terminated (WockyJingleSession *session,
                TP_FILE_TRANSFER_STATE_CHANGE_REASON_LOCAL_STOPPED :
                TP_FILE_TRANSFER_STATE_CHANGE_REASON_REMOTE_STOPPED);
     }
-  tp_base_channel_close (TP_BASE_CHANNEL(chan));
+  /* skip if channel was closing */
+  if (cstate != TP_FILE_TRANSFER_STATE_CANCELLED)
+    tp_base_channel_close (TP_BASE_CHANNEL(chan));
 }
 
 static void
@@ -413,11 +524,13 @@ content_state_changed (WockyJingleContent *c,
 
 static GabbleBytestreamIface *
 create_bytestream (GabbleJingleFT *self, TpHandle peer, const gchar *resource,
-    GabbleBytestreamFactory *factory, gchar *stream_id, const gchar *transport_ns)
+    GabbleConnection *conn, gchar *stream_id, const gchar *transport_ns)
 {
   GabbleBytestreamIface *bytestream;
   gchar *method, *sid;
   const gchar *res;
+
+  g_assert (conn != NULL);
 
   if (transport_ns == NULL)
     g_object_get (self->priv->transport, "bytestream", &method, NULL);
@@ -435,13 +548,31 @@ create_bytestream (GabbleJingleFT *self, TpHandle peer, const gchar *resource,
     res = resource;
 
   DEBUG ("Creating bytestream[%s] %s for %d/%s", method, sid, peer, res);
-  bytestream = gabble_bytestream_factory_create_from_method (factory, method,
-      peer, sid, NULL, res, NULL, GABBLE_BYTESTREAM_STATE_LOCAL_PENDING);
+  bytestream = gabble_bytestream_factory_create_from_method (
+      conn->bytestream_factory, method, peer, sid, NULL, res,
+      wocky_session_get_jid (conn->session),
+      GABBLE_BYTESTREAM_STATE_LOCAL_PENDING);
 
   if (stream_id == NULL)
     g_free (sid);
   if (transport_ns == NULL)
     g_free (method);
+
+  /* enable external stream management to suppress negotiation */
+  g_object_set (bytestream, "managed-state", 1, NULL);
+
+  gabble_signal_connect_weak (bytestream, "state-changed",
+              (GCallback) bytestream_state_changed, G_OBJECT (self));
+
+  gabble_signal_connect_weak (bytestream, "connection-error",
+              (GCallback) bytestream_error_cb, G_OBJECT (self));
+
+  gabble_signal_connect_weak (bytestream, "send-streamhosts",
+              (GCallback) on_send_streamhosts, G_OBJECT (self));
+
+  gabble_signal_connect_weak (bytestream, "streamhost-used",
+              (GCallback) on_streamhost_used, G_OBJECT (self));
+
   return bytestream;
 }
 
@@ -449,7 +580,6 @@ GabbleFileTransferChannel *
 gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
 {
   GabbleBytestreamIface *bytestream;
-  GabbleBytestreamFactory *factory;
   GabbleFileTransferChannel *chan;
   WockyJingleSession *session;
   GabbleJingleFTContent *meta;
@@ -460,11 +590,9 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
   g_assert (conn != NULL);
 
   meta = self->priv->desc;
-  factory = conn->bytestream_factory;
   session = WOCKY_JINGLE_CONTENT (self)->session;
 
   /* below conditions are programming errors */
-  g_assert (factory != NULL);
   g_assert (session != NULL);
 
   /* these though are based on jingle xml input */
@@ -478,7 +606,7 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
 
   bytestream = create_bytestream (self, peer,
       wocky_jingle_session_get_peer_resource (session),
-      factory, NULL, NULL);
+      conn, NULL, NULL);
   if (bytestream == NULL)
     goto TransportException;
 
@@ -500,9 +628,9 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
               ((meta->file->range_len > 0) ? TRUE : FALSE),
               bytestream, NULL, NULL, NULL, NULL, NULL);
 
-  DEBUG ("called %p <-[%p:%p]-> %p on %p:%p:%p",
-              chan, factory, bytestream, self->priv->transport,
-              session, self, conn);
+  DEBUG ("called %p <-[%p]-> %p on %p:%p:%p",
+              chan, bytestream, self->priv->transport,
+              conn, session, self);
 
   if (chan == NULL)
     goto TransportException;
@@ -516,29 +644,16 @@ gabble_jingle_ft_new_channel (GabbleJingleFT *self, GabbleConnection *conn)
   gabble_signal_connect_weak (bytestream, "rejected",
               (GCallback) channel_rejected, G_OBJECT (self));
 
-  gabble_signal_connect_weak (bytestream, "connection-error",
-              (GCallback) bytestream_error_cb, G_OBJECT (self));
-
-  gabble_signal_connect_weak (bytestream, "state-changed",
-              (GCallback) bytestream_state_changed, G_OBJECT (self));
-
   return chan;
 
 TransportException:
   DEBUG ("Channel[%p] is set but other prereqs are missing (%p, %p)",
-              chan, factory, self->priv->transport);
+              chan, conn, self->priv->transport);
   wocky_jingle_content_reject (WOCKY_JINGLE_CONTENT (self),
               WOCKY_JINGLE_REASON_FAILED_TRANSPORT);
   if (chan != NULL)
     g_object_unref (chan);
   return NULL;
-}
-
-void
-gabble_jingle_ft_set_channel (GabbleJingleFT *self,
-    GabbleFileTransferChannel *channel)
-{
-  set_channel (self, channel);
 }
 
 gboolean
@@ -597,7 +712,7 @@ gabble_jingle_ft_new_content (GabbleFileTransferChannel *channel,
   g_object_set (G_OBJECT (c->priv->transport), "stream-id", sid, NULL);
 
   bs = create_bytestream (c, tp_base_channel_get_target_handle (base),
-          resource, conn->bytestream_factory, sid, NULL);
+          resource, conn, sid, NULL);
   g_free (sid);
   if (bs == NULL)
     {
@@ -833,7 +948,6 @@ parse_description (WockyJingleContent *content,
     }
   DEBUG ("parse description set chain: %p:%p:%p:%p", self, priv, priv->desc, priv->desc->file);
 
-  _wocky_jingle_content_set_media_ready (content);
 }
 
 static void

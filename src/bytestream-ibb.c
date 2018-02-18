@@ -59,6 +59,7 @@ enum
   PROP_STATE,
   PROP_PROTOCOL,
   PROP_BLOCK_SIZE,
+  PROP_MANAGED,
   LAST_PROPERTY
 };
 
@@ -76,6 +77,7 @@ struct _GabbleBytestreamIBBPrivate
   gchar *stream_init_id;
   gchar *peer_resource;
   GabbleBytestreamState state;
+  guint managed;
   gchar *peer_jid;
   guint block_size;
 
@@ -208,6 +210,9 @@ gabble_bytestream_ibb_get_property (GObject *object,
       case PROP_BLOCK_SIZE:
         g_value_set_uint (value, priv->block_size);
         break;
+      case PROP_MANAGED:
+        g_value_set_uint (value, priv->managed);
+        break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -252,6 +257,9 @@ gabble_bytestream_ibb_set_property (GObject *object,
         break;
       case PROP_BLOCK_SIZE:
         priv->block_size = g_value_get_uint (value);
+        break;
+      case PROP_MANAGED:
+        priv->managed = g_value_get_uint (value);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -322,6 +330,8 @@ gabble_bytestream_ibb_class_init (
        "state");
    g_object_class_override_property (object_class, PROP_PROTOCOL,
        "protocol");
+   g_object_class_override_property (object_class, PROP_MANAGED,
+       "managed-state");
 
   param_spec = g_param_spec_string (
       "peer-resource",
@@ -349,6 +359,7 @@ gabble_bytestream_ibb_class_init (
       G_PARAM_CONSTRUCT | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
   g_object_class_install_property (object_class, PROP_BLOCK_SIZE,
       param_spec);
+
 }
 
 static void
@@ -718,6 +729,14 @@ gabble_bytestream_ibb_accept (GabbleBytestreamIface *iface,
       return;
     }
 
+  if (priv->managed > 0)
+    {
+      DEBUG ("Channel[%p] accepted on %p, relaying upstream", user_data, self);
+      g_signal_emit_by_name (self, "accepted", 0, user_data);
+      g_object_set (self, "state", GABBLE_BYTESTREAM_STATE_ACCEPTED, NULL);
+      return;
+    }
+
   msg = gabble_bytestream_factory_make_accept_iq (priv->peer_jid,
       priv->stream_init_id, NS_IBB);
   si = wocky_node_get_child_ns (
@@ -748,6 +767,14 @@ gabble_bytestream_ibb_decline (GabbleBytestreamIBB *self,
   WockyStanza *msg;
 
   g_return_if_fail (priv->state == GABBLE_BYTESTREAM_STATE_LOCAL_PENDING);
+
+  if (priv->managed > 0)
+    {
+      DEBUG ("Channel rejected bytestreem %p, relaying upstream", self);
+      g_signal_emit_by_name (self, "rejected", 0);
+      g_object_set (self, "state", GABBLE_BYTESTREAM_STATE_CLOSED, NULL);
+      return;
+    }
 
   msg = wocky_stanza_build (WOCKY_STANZA_TYPE_IQ, WOCKY_STANZA_SUB_TYPE_ERROR,
       NULL, priv->peer_jid,
@@ -857,6 +884,9 @@ gabble_bytestream_ibb_initiate (GabbleBytestreamIface *iface)
   GabbleBytestreamIBBPrivate *priv = GABBLE_BYTESTREAM_IBB_GET_PRIVATE (self);
   WockyStanza *msg;
   gchar *block_size;
+
+  if (priv->managed > 0)
+    return TRUE;
 
   if (priv->state != GABBLE_BYTESTREAM_STATE_INITIATING)
     {

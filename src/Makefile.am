@@ -161,6 +161,8 @@ libgabble_convenience_la_SOURCES += \
     jingle-ft-content.c \
     jingle-transport-ibb.h \
     jingle-transport-ibb.c \
+    jingle-transport-s5b.h \
+    jingle-transport-s5b.c \
     jingle-share.h \
     jingle-share.c \
     jingle-mint.h \
