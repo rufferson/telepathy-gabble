@@ -1736,6 +1736,7 @@ gabble_vcard_manager_edit_info_new (const gchar *element_name,
         element_value = NULL;
 
         /* deliberate fall-through to check the varargs... */
+	__attribute__((fallthrough));
       case GABBLE_VCARD_EDIT_DELETE:
       case GABBLE_VCARD_EDIT_CLEAR:
       {
