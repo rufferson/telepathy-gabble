@@ -1,3 +1,4 @@
 [submodule "lib/ext/wocky"]
 	path = lib/ext/wocky
-	url = https://github.com/TelepathyIM/wocky.git
+	url = git@github.com:rufferson/wocky.git
+	branch = nodoc
