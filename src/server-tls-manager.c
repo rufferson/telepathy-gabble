@@ -202,7 +202,7 @@ server_tls_channel_closed_cb (GabbleServerTLSChannel *channel,
       DEBUG ("Channel closed, but unhandled, falling back...");
 
       chainup->verify_async_func (WOCKY_TLS_HANDLER (self),
-          self->priv->tls_session, self->priv->peername,
+          self->priv->tls_session,
           self->priv->reference_identities, verify_fallback_cb, NULL);
 
       self->priv->channel = NULL;
@@ -327,7 +327,6 @@ fill_reference_identities (GabbleServerTLSManager *self,
 static void
 gabble_server_tls_manager_verify_async (WockyTLSHandler *handler,
     WockyTLSSession *tls_session,
-    const gchar *peername,
     GStrv extra_identities,
     GAsyncReadyCallback callback,
     gpointer user_data)
@@ -335,6 +334,7 @@ gabble_server_tls_manager_verify_async (WockyTLSHandler *handler,
   GabbleServerTLSManager *self = GABBLE_SERVER_TLS_MANAGER (handler);
   GabbleTLSCertificate *certificate;
   GSimpleAsyncResult *result;
+  const gchar *peername = NULL;
 
   g_return_if_fail (self->priv->async_result == NULL);
 
@@ -363,7 +363,7 @@ gabble_server_tls_manager_verify_async (WockyTLSHandler *handler,
           "verification.");
 
       chainup->verify_async_func (WOCKY_TLS_HANDLER (self), tls_session,
-          peername, self->priv->reference_identities, verify_fallback_cb, NULL);
+          self->priv->reference_identities, verify_fallback_cb, NULL);
 
       return;
     }
