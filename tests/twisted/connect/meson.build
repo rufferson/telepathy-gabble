@@ -5,6 +5,7 @@ twisted_tests += files([
   'disco-no-reply.py',
   'network-error.py',
   'stream-closed.py',
+  'sm-resume.py',
   'test-connection-params.py',
   'test-fail.py',
   'test-nonblocking-tls.py',

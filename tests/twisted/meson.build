@@ -124,6 +124,7 @@ if has_twisted.returncode() == 0 and has_pydbus.returncode() == 0
           'CHECK_TWISTED_PORT=@0@'.format(6666 + tnum),
           'CHECK_TWISTED_RANGE=@0@,@1@'.format(9999 + tnum*100, 9999 + (tnum+1)*100-1),
           'CHECK_TWISTED_VERBOSE=1',
+          'WOCKY_CHANNEL_BINDING_TYPE=tls-exporter',
           'GABBLE_TWISTED_BDIR='+meson.current_build_dir(),
           'GABBLE_TWISTED_PATH='+meson.current_source_dir()
         ],
