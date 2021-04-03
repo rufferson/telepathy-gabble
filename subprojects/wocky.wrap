@@ -1,4 +1,4 @@
 [wrap-git]
-url = https://gitlab.freedesktop.org/telepathy/wocky
-#url = https://github.com/TelepathyIM/wocky.git
-revision = head
+#url = https://gitlab.freedesktop.org/telepathy/wocky
+url = https://github.com/rufferson/wocky.git
+revision = sm
